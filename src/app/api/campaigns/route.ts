@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/db";
 import campaigns from "@/models/campaigns";
-import company from "@/models/company";
+import company from "@/models/campany";
 import { NextRequest, NextResponse } from "next/server";
 
 const VAPI_BASE_URL = "https://api.vapi.ai";
@@ -42,12 +42,11 @@ export async function POST(request: NextRequest) {
       description,
       csvUrl,
       company_id,
-      assistantId, // VAPI assistant ID
       phoneNumbers, // Array of phone numbers to call
       scheduleAt, // Optional: when to schedule the campaign
     } = body;
 
-    if (!name || !company_id || !assistantId || !phoneNumbers) {
+    if (!name || !company_id || !phoneNumbers) {
       return NextResponse.json(
         {
           error:
@@ -68,7 +67,7 @@ export async function POST(request: NextRequest) {
     // Create campaign in VAPI
     const vapiCampaignData = {
       name,
-      assistantId,
+      assistantId:"",    // VAPI assistant ID
       phoneNumbers: phoneNumbers.map((phone: string) => ({
         phoneNumber: phone,
       })),

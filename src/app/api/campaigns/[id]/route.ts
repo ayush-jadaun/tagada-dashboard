@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/db";
 import campaigns from "@/models/campaigns";
-import company from "@/models/company";
+import company from "@/models/campany";
 import { NextRequest, NextResponse } from "next/server";
 
 const VAPI_BASE_URL = "https://api.vapi.ai";
