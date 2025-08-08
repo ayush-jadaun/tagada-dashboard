@@ -1,7 +1,7 @@
-import { parseCSVFromUrl } from "@/lib/csvParser";
 import { connectDB } from "@/lib/db";
 import campaigns from "@/models/campaigns";
 import company from "@/models/campany";
+import { parseCSVFromUrl } from "@/lib/csvParser";
 import { NextRequest, NextResponse } from "next/server";
 
 const VAPI_BASE_URL = "https://api.vapi.ai";
@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log("POST /api/campaigns called");
     const {
       name,
       description,
@@ -311,9 +312,11 @@ export async function POST(request: NextRequest) {
     });
 
     // Update company's campaign list
-    await company.findByIdAndUpdate(company_id, {
+    console.log("Updating company's campaign list");
+    const updatedCompany = await company.findByIdAndUpdate(company_id, {
       $push: { campaigns: newCampaign._id },
     });
+    console.log("Updated company:", updatedCompany);
 
     const populatedCampaign = await campaigns
       .findById(newCampaign._id)

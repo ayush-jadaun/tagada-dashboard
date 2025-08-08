@@ -117,12 +117,14 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
         company_id: params.id
       }
 
-      const response = await fetch(`/api/companies/campaigns`, {
+      const response = await fetch('/api/campaigns', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(campaignData)
+        body: JSON.stringify(
+          campaignData
+)
       })
 
       if (!response.ok) {
