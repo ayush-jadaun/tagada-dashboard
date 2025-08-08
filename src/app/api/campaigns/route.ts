@@ -45,12 +45,12 @@ export async function POST(request: NextRequest) {
       phoneNumbers, // Array of phone numbers to call
       scheduleAt, // Optional: when to schedule the campaign
     } = body;
-
+console.log(phoneNumbers);
     if (!name || !company_id || !phoneNumbers) {
       return NextResponse.json(
         {
           error:
-            "Missing required fields: name, company_id, assistantId, phoneNumbers",
+            "Missing required fields: name, company_id, phoneNumbers",
         },
         { status: 400 }
       );
@@ -65,14 +65,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Create campaign in VAPI
-    const vapiCampaignData = {
-      name,
-      assistantId:"",    // VAPI assistant ID
-      phoneNumbers: phoneNumbers.map((phone: string) => ({
-        phoneNumber: phone,
-      })),
-      ...(scheduleAt && { scheduleAt }),
-    };
+   // Create campaign in VAPI
+// Create campaign in VAPI
+const vapiCampaignData = {
+  name,
+  assistantId: "a84057e3-1fea-402d-881e-102f603e95b2",
+  phoneNumberId:"bd1b7811-bbbc-42bb-8b47-4abd96c6342e",
+  customers: phoneNumbers.map((customerNumber: string) => ({
+  number: customerNumber
+  })),
+  ...(scheduleAt && { scheduleAt }),
+};
+
+
 
     const vapiResponse = await fetch(`${VAPI_BASE_URL}/campaign`, {
       method: "POST",
