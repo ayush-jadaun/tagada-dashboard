@@ -2,7 +2,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Company, Campaign } from '@/types/types'
 
@@ -12,14 +12,14 @@ interface CompanyDetailPageProps {
   }
 }
 
-export default function CompanyDetailPage({ params }: CompanyDetailPageProps) {
+export default function CompanyDetailPage() {
   const [company, setCompany] = useState<Company | null>(null)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const router = useRouter()
-
+const params = useParams()
   useEffect(() => {
     console.log('params.id', params.id)
     fetchCompanyDetails()
@@ -36,13 +36,10 @@ export default function CompanyDetailPage({ params }: CompanyDetailPageProps) {
       }
       const companyData = await companyResponse.json()
       setCompany(companyData)
-
-      // Fetch campaigns for this company
-      const campaignsResponse = await fetch(`/api/companies/${params.id}/campaigns`)
-      if (campaignsResponse.ok) {
-        const campaignsData = await campaignsResponse.json()
+      // set campaigns for this company
+        const campaignsData=companyData.campaigns
         setCampaigns(campaignsData)
-      }
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

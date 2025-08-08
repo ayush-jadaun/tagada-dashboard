@@ -15,11 +15,8 @@ interface CreateCampaignPageProps {
 interface CampaignFormData {
   name: string
   description: string
-  status: string
   csvFile: File | null
   csvUrl: string
-  total_contacts: number
-  vapiCampaignId: string
 }
 
 export default function CreateCampaignPage({ params }: CreateCampaignPageProps) {
@@ -32,11 +29,8 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
   const [formData, setFormData] = useState<CampaignFormData>({
     name: '',
     description: '',
-    status: 'draft',
     csvFile: null,
     csvUrl: '',
-    total_contacts: 0,
-    vapiCampaignId: ''
   })
 
   const router = useRouter()
@@ -79,17 +73,7 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
       return
     }
 
-    setFormData(prev => ({ ...prev, csvFile: file }))
-    
-    // Auto-count contacts from CSV
-    try {
-      const text = await file.text()
-      const lines = text.split('\n').filter(line => line.trim())
-      const contactCount = Math.max(0, lines.length - 1) // Subtract header row
-      setFormData(prev => ({ ...prev, total_contacts: contactCount }))
-    } catch (err) {
-      console.error('Error reading CSV file:', err)
-    }
+    setFormData(prev => ({ ...prev, csvFile: file }))   
   }
 
   const uploadCsvFile = async (file: File): Promise<string> => {
@@ -97,7 +81,7 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
     formData.append('csv', file)
     formData.append('companyId', params.id)
 
-    const response = await fetch('/api/upload-csv', {
+    const response = await fetch('/api/campaigns/upload-csv', {
       method: 'POST',
       body: formData
     })
@@ -107,7 +91,7 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
     }
 
     const data = await response.json()
-    return data.csvUrl
+    return data.url
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,26 +106,25 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
       if (formData.csvFile) {
         setUploadingCsv(true)
         csvUrl = await uploadCsvFile(formData.csvFile)
-        setUploadingCsv(false)
+        setUploadingCsv(false);
       }
 
       // Create campaign
       const campaignData = {
         name: formData.name,
         description: formData.description,
-        status: formData.status,
         csvUrl,
-        total_contacts: formData.total_contacts,
-        vapiCampaignId: formData.vapiCampaignId,
         company_id: params.id
       }
 
-      const response = await fetch(`/api/companies/${params.id}/campaigns`, {
+      const response = await fetch('/api/campaigns', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(campaignData)
+        body: JSON.stringify(
+          campaignData
+)
       })
 
       if (!response.ok) {
@@ -152,7 +135,7 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
       const newCampaign = await response.json()
       
       // Redirect to campaign detail page
-      router.push(`/dashboard/companies/${params.id}/campaigns/${newCampaign._id}`)
+      router.push(`/dashboard/companies/${params.id}/campaigns/${newCampaign.campaign._id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -272,45 +255,7 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter campaign description"
               />
-            </div>
-
-            {/* Status */}
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                id="status"
-                name="status"
-                value={formData.status}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="draft">Draft</option>
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-
-            {/* VAPI Campaign ID */}
-            <div>
-              <label htmlFor="vapiCampaignId" className="block text-sm font-medium text-gray-700">
-                VAPI Campaign ID
-              </label>
-              <input
-                type="text"
-                id="vapiCampaignId"
-                name="vapiCampaignId"
-                value={formData.vapiCampaignId}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Enter VAPI campaign ID (optional)"
-              />
-              <p className="mt-1 text-sm text-gray-500">
-                Link this campaign to an existing VAPI campaign
-              </p>
-            </div>
+            </div>       
           </div>
         </div>
 
@@ -368,27 +313,7 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="https://example.com/contacts.csv"
               />
-            </div>
-
-            {/* Total Contacts */}
-            <div>
-              <label htmlFor="total_contacts" className="block text-sm font-medium text-gray-700">
-                Total Contacts
-              </label>
-              <input
-                type="number"
-                id="total_contacts"
-                name="total_contacts"
-                min="0"
-                value={formData.total_contacts}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Number of contacts"
-              />
-              <p className="mt-1 text-sm text-gray-500">
-                This will be auto-calculated when you upload a CSV file
-              </p>
-            </div>
+            </div>            
           </div>
         </div>
 
