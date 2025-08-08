@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/db";
 import campaigns from "@/models/campaigns"; // ✅ Fixed import
-import companies from "@/models/company"; // ✅ Fixed import
+import companies from "@/models/campany"; // ✅ Fixed import
 import { parseCSVFromUrl } from "@/lib/csvParser";
 import { NextRequest, NextResponse } from "next/server";
 

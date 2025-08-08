@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CreateCompanyData } from '@/types/types'
+import { CreateCompanyData } from '@/types'
 
 export default function CreateCompanyPage() {
   const [formData, setFormData] = useState<CreateCompanyData>({

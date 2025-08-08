@@ -15,7 +15,7 @@ export async function POST(
 
     await connectDB();
 
-    const campaign = await campaigns.findById(id); // ✅ fixed usage
+    const campaign = await campaigns.findById(id); 
     if (!campaign) {
       return NextResponse.json(
         { error: "Campaign not found" },

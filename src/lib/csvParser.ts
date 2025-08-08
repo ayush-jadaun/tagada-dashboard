@@ -169,7 +169,8 @@ export async function parseCSVFromUrl(
             summary,
           });
         },
-        error: (error) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        error: (error:any) => {
           throw new Error(`Papa Parse error: ${error.message}`);
         },
       });
