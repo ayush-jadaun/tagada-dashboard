@@ -6,13 +6,19 @@ import { NextRequest, NextResponse } from "next/server";
 const VAPI_BASE_URL = "https://api.vapi.ai";
 const VAPI_API_KEY = process.env.VAPI_API_KEY;
 
-// GET - Get specific campaign by ID
+// GET - Get specific campaign by ID with call data
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
+    const { searchParams } = new URL(request.url);
+
+    // Check if user wants call data specifically
+    const includeCalls = searchParams.get("includeCalls") === "true";
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
 
     await connectDB();
 
@@ -23,6 +29,9 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    let vapiCampaignData = null;
+    let callsInfo = null;
 
     // Sync status with VAPI if campaign exists
     if (campaign.vapiCampaignId) {
@@ -37,10 +46,78 @@ export async function GET(
         );
 
         if (vapiResponse.ok) {
-          const vapiCampaign = await vapiResponse.json();
-          if (campaign.status !== vapiCampaign.status) {
-            campaign.status = vapiCampaign.status;
+          vapiCampaignData = await vapiResponse.json();
+
+          // Update local campaign status if different
+          if (campaign.status !== vapiCampaignData.status) {
+            campaign.status = vapiCampaignData.status;
             await campaign.save();
+          }
+
+          // Extract call information if requested
+          if (includeCalls) {
+            // Get calls data - it might be in different formats
+            let callsArray = [];
+
+            if (vapiCampaignData.calls) {
+              if (
+                typeof vapiCampaignData.calls === "object" &&
+                !Array.isArray(vapiCampaignData.calls)
+              ) {
+                // If calls is an object with call IDs as keys
+                callsArray = Object.values(vapiCampaignData.calls);
+              } else if (Array.isArray(vapiCampaignData.calls)) {
+                // If calls is already an array
+                callsArray = vapiCampaignData.calls;
+              }
+            }
+
+            // If no calls in the campaign response, try to fetch them separately
+            if (callsArray.length === 0 && campaign.vapiCampaignId) {
+              try {
+                // Try to fetch calls from VAPI calls endpoint (if it exists)
+                const callsResponse = await fetch(
+                  `${VAPI_BASE_URL}/call?campaignId=${campaign.vapiCampaignId}`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${VAPI_API_KEY}`,
+                    },
+                  }
+                );
+
+                if (callsResponse.ok) {
+                  const callsData = await callsResponse.json();
+                  callsArray = Array.isArray(callsData)
+                    ? callsData
+                    : callsData.calls || [];
+                }
+              } catch (error) {
+                console.warn("Could not fetch calls separately:", error);
+              }
+            }
+
+            // Apply pagination to calls
+            const startIndex = (page - 1) * limit;
+            const endIndex = startIndex + limit;
+            const paginatedCalls = callsArray.slice(startIndex, endIndex);
+
+            callsInfo = {
+              calls: paginatedCalls,
+              pagination: {
+                page,
+                limit,
+                total: callsArray.length,
+                totalPages: Math.ceil(callsArray.length / limit),
+              },
+              counters: {
+                scheduled: vapiCampaignData.callsCounterScheduled || 0,
+                queued: vapiCampaignData.callsCounterQueued || 0,
+                inProgress: vapiCampaignData.callsCounterInProgress || 0,
+                ended: vapiCampaignData.callsCounterEnded || 0,
+                endedVoicemail:
+                  vapiCampaignData.callsCounterEndedVoicemail || 0,
+              },
+            };
           }
         }
       } catch (error) {
@@ -48,7 +125,31 @@ export async function GET(
       }
     }
 
-    return NextResponse.json(campaign);
+    // Build response object
+    const response = {
+      ...campaign.toObject(),
+      vapiData: vapiCampaignData
+        ? {
+            status: vapiCampaignData.status,
+            endedReason: vapiCampaignData.endedReason,
+            schedulePlan: vapiCampaignData.schedulePlan,
+            counters: {
+              scheduled: vapiCampaignData.callsCounterScheduled || 0,
+              queued: vapiCampaignData.callsCounterQueued || 0,
+              inProgress: vapiCampaignData.callsCounterInProgress || 0,
+              ended: vapiCampaignData.callsCounterEnded || 0,
+              endedVoicemail: vapiCampaignData.callsCounterEndedVoicemail || 0,
+            },
+          }
+        : null,
+    };
+
+    // Add call information if requested
+    if (callsInfo) {
+      response.callsInfo = callsInfo;
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error fetching campaign:", error);
     return NextResponse.json(
@@ -122,7 +223,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     await connectDB();
 
