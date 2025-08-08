@@ -32,7 +32,7 @@ const campaignSchema = new mongoose.Schema(
         "created",
         "running",
         "paused",
-        "completed",
+        "ended",
         "failed",
         "scheduled",
       ],
