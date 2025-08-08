@@ -1,3 +1,4 @@
+import { parseCSVFromUrl } from "@/lib/csvParser";
 import { connectDB } from "@/lib/db";
 import campaigns from "@/models/campaigns";
 import company from "@/models/campany";
@@ -64,21 +65,38 @@ console.log(phoneNumbers);
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // Create campaign in VAPI
-   // Create campaign in VAPI
-// Create campaign in VAPI
+
+let finalNumbers = phoneNumbers;
+
+// If csvUrl is provided, parse it instead of using phoneNumbers directly
+if (csvUrl) {
+  finalNumbers = await parseCSVFromUrl(csvUrl);
+}
+
 const vapiCampaignData = {
   name,
   assistantId: "a84057e3-1fea-402d-881e-102f603e95b2",
-  phoneNumberId:"bd1b7811-bbbc-42bb-8b47-4abd96c6342e",
-  customers: phoneNumbers.map((customerNumber: string) => ({
-  number: customerNumber
+  phoneNumberId: "bd1b7811-bbbc-42bb-8b47-4abd96c6342e",
+  customers: finalNumbers.map((num: string) => ({
+    number: num,
+    
+    
   })),
   ...(scheduleAt && { scheduleAt }),
 };
 
+// const vapiCampaignData = {
+//   name,
+//   assistantId: "a84057e3-1fea-402d-881e-102f603e95b2",
+//   phoneNumberId:"bd1b7811-bbbc-42bb-8b47-4abd96c6342e",
+//   customers: phoneNumbers.map((customerNumber: string) => ({
+//   number: customerNumber
+//   })),
+//   ...(scheduleAt && { scheduleAt }),
+// };
 
 
+console.log("Data to vapi:",vapiCampaignData);
     const vapiResponse = await fetch(`${VAPI_BASE_URL}/campaign`, {
       method: "POST",
       headers: {
