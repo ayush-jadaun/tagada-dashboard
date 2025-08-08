@@ -17,7 +17,10 @@ export async function POST(request: NextRequest) {
       csvUrl,
       company_id,
       assistantId,
-      phoneNumberColumn = "phone",
+      nameColumn = "name",
+      phoneColumn = "phone_number",
+      amountColumn = "amount_owed",
+      requireAllFields = true,
       scheduleAt,
     } = body;
 
@@ -39,10 +42,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // ✅ Parse CSV
+    // ✅ Parse CSV with all three fields
     let parsedData;
     try {
-      parsedData = await parseCSVFromUrl(csvUrl, phoneNumberColumn);
+      parsedData = await parseCSVFromUrl(csvUrl, {
+        nameColumn,
+        phoneColumn,
+        amountColumn,
+        requireAllFields,
+      });
     } catch (error) {
       return NextResponse.json(
         {
@@ -53,22 +61,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (parsedData.phoneNumbers.length === 0) {
+    if (parsedData.validCount === 0) {
       return NextResponse.json(
         {
-          error: "No valid phone numbers found in CSV",
+          error: "No valid contacts found in CSV",
           parseErrors: parsedData.errors,
+          totalRows: parsedData.totalCount,
         },
         { status: 400 }
       );
     }
 
-    // ✅ Create VAPI campaign
+    // ✅ Create VAPI campaign with contact data
     const vapiPayload = {
       name,
       assistantId,
-      phoneNumbers: parsedData.phoneNumbers.map((phone: string) => ({
-        phoneNumber: phone,
+      phoneNumbers: parsedData.contacts.map((contact) => ({
+        phoneNumber: contact.phoneNumber,
+        // Include additional contact data if VAPI supports it
+        metadata: {
+          name: contact.name,
+          amountOwed: contact.amountOwed,
+          // You can add more fields here if needed
+        },
       })),
       ...(scheduleAt && { scheduleAt }),
     };
@@ -93,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     const vapiCampaign = await vapiResponse.json();
 
-    // ✅ Store locally
+    // ✅ Store locally with enhanced contact data
     const newCampaign = await campaigns.create({
       name,
       description,
@@ -101,7 +116,32 @@ export async function POST(request: NextRequest) {
       company_id,
       vapiCampaignId: vapiCampaign.id,
       status: vapiCampaign.status || "created",
-      total_contacts: parsedData.phoneNumbers.length,
+      total_contacts: parsedData.validCount,
+      // Store the parsed contact data
+      contacts: parsedData.contacts.map((contact) => ({
+        name: contact.name,
+        phoneNumber: contact.phoneNumber,
+        amountOwed: contact.amountOwed,
+        status: "pending", // or whatever default status you want
+      })),
+      // Store summary statistics
+      summary: {
+        totalAmount: parsedData.summary.totalAmount,
+        averageAmount: parsedData.summary.averageAmount,
+        minAmount: parsedData.summary.minAmount,
+        maxAmount: parsedData.summary.maxAmount,
+      },
+      // Store parsing metadata
+      parseMetadata: {
+        totalRowsParsed: parsedData.totalCount,
+        validContactsFound: parsedData.validCount,
+        errorCount: parsedData.errors.length,
+        columnMapping: {
+          nameColumn,
+          phoneColumn,
+          amountColumn,
+        },
+      },
     });
 
     await companies.findByIdAndUpdate(company_id, {
@@ -115,11 +155,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         campaign: populatedCampaign,
-        message: `Campaign created with ${parsedData.phoneNumbers.length} contacts from CSV`,
+        message: `Campaign created with ${parsedData.validCount} valid contacts from CSV`,
         parseStats: {
           totalRows: parsedData.totalCount,
-          validPhoneNumbers: parsedData.phoneNumbers.length,
+          validContacts: parsedData.validCount,
+          invalidRows: parsedData.totalCount - parsedData.validCount,
           errors: parsedData.errors,
+          summary: parsedData.summary,
+          contactPreview: parsedData.contacts.slice(0, 5), // Show first 5 contacts as preview
         },
       },
       { status: 201 }
