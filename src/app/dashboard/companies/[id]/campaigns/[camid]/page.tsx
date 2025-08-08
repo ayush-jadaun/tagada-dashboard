@@ -1,9 +1,11 @@
 "use client"
 import React, { useState, useEffect } from 'react';
 import { Phone, Users, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, BarChart3, Eye, Pause, Play, Trash2 } from 'lucide-react';
+import { useParams } from 'next/navigation';
 
 const CampaignDetailPage = () => {
-  const [campaignId] = useState('674b123456789abcdef12345'); // Mock campaign ID
+  const params = useParams();
+  const campaignId = params.camid
   const [campaign, setCampaign] = useState(null);
   const [status, setStatus] = useState(null);
   const [calls, setCalls] = useState([]);
@@ -119,14 +121,14 @@ const CampaignDetailPage = () => {
     // Simulate API calls
     const fetchData = async () => {
       setLoading(true);
-      
+      console.log("campaign id:", campaignId);
       // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await  Promise.all([fetchCampaign(), fetchStatus(), fetchCall(), fetchAnalytics()]);
       
-      setCampaign(mockCampaign);
-      setStatus(mockStatus);
-      setCalls(mockCalls);
-      setAnalytics(mockAnalytics);
+      // setCampaign(mockCampaign);
+      // setStatus(mockStatus);
+      // setCalls(mockCalls);
+      // setAnalytics(mockAnalytics);
       setCallsPagination({
         page: 1,
         limit: 10,
@@ -139,6 +141,60 @@ const CampaignDetailPage = () => {
 
     fetchData();
   }, [campaignId]);
+  async function fetchCampaign(){
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch campaign details');
+      }
+      const campaignData = await response.json();
+      setCampaign(campaignData);
+      console.log( "campaign details:", campaignData);
+    } catch (err) {
+      // setError(err instanceof Error ? err.message : 'Failed to fetch campaign details');
+    console.log(err)
+    } 
+  }
+  async function fetchCall(){
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/calls`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch campaign details');
+      }
+      const callData = await response.json();
+      setCalls(callData);
+    } catch (err) {
+      // setError(err instanceof Error ? err.message : 'Failed to fetch campaign details');
+    console.log(err)
+    }
+
+  }
+  async function fetchAnalytics(){
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/analytics`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch campaign details');
+      }
+      const analyticsData = await response.json();
+      setAnalytics(analyticsData);
+    } catch (err) {
+      // setError(err instanceof Error ? err.message : 'Failed to fetch campaign details');
+    console.log(err)
+    }
+  };
+  async function fetchStatus(){
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/status`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch campaign details');
+      }
+      const statusData = await response.json();
+      setStatus(statusData);
+    } catch (err) {
+      // setError(err instanceof Error ? err.message : 'Failed to fetch campaign details');
+    console.log(err)
+    }
+  };
 
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);

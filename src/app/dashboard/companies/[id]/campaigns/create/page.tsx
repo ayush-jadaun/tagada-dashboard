@@ -135,7 +135,7 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
       const newCampaign = await response.json()
       
       // Redirect to campaign detail page
-      router.push(`/dashboard/companies/${params.id}/campaigns/${newCampaign._id}`)
+      router.push(`/dashboard/companies/${params.id}/campaigns/${newCampaign.campaign._id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
