@@ -38,7 +38,7 @@ export async function parseCSVFromUrl(
 ): Promise<ParsedCSVData> {
   const {
     nameColumn = "name",
-    phoneColumn = "phone_number",
+    phoneColumn = "number",
     amountColumn = "amount_owed",
     requireAllFields = true,
   } = options;
