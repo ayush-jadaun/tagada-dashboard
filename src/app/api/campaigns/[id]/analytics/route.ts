@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 const VAPI_BASE_URL = "https://api.vapi.ai";
 const VAPI_API_KEY = process.env.VAPI_API_KEY;
 
-// Define interfaces for type safety
+// Interfaces
 interface Customer {
   number: string;
 }
@@ -68,25 +68,22 @@ interface AnalyticsResponse {
   recentCalls: VapiCall[];
 }
 
-// Helper function to parse call duration from timestamps
+// Helpers
 function calculateCallDuration(
   startedAt: string | null,
   endedAt: string | null
 ): number {
   if (!startedAt || !endedAt) return 0;
-
   const start = new Date(startedAt).getTime();
   const end = new Date(endedAt).getTime();
-  return Math.max(0, (end - start) / 1000); // Duration in seconds
+  return Math.max(0, (end - start) / 1000); // seconds
 }
 
-// Helper function to get hour from timestamp
 function getHourFromTimestamp(timestamp: string | null): string {
   if (!timestamp) return "Unknown";
   return new Date(timestamp).getHours().toString().padStart(2, "0");
 }
 
-// Helper function to get day from timestamp
 function getDayFromTimestamp(timestamp: string | null): string {
   if (!timestamp) return "Unknown";
   const days = [
@@ -101,13 +98,16 @@ function getDayFromTimestamp(timestamp: string | null): string {
   return days[new Date(timestamp).getDay()];
 }
 
-// GET - Get analytics for a specific campaign
+// API route handler
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: {
+    params: { id: string };
+    searchParams?: Record<string, string | string[] | undefined>;
+  }
 ) {
   try {
-    const { id } = await params;
+    const { id } = await context.params;
 
     await connectDB();
 
@@ -126,11 +126,9 @@ export async function GET(
       );
     }
 
-    // Fetch all calls for the campaign
     let callsArray: VapiCall[] = [];
 
     try {
-      // Method 1: Try to get the full campaign data
       const vapiResponse = await fetch(
         `${VAPI_BASE_URL}/campaign/${campaign.vapiCampaignId}`,
         {
@@ -145,7 +143,6 @@ export async function GET(
 
         if (vapiCampaign.calls) {
           if (Array.isArray(vapiCampaign.calls)) {
-            // Parse JSON strings if they come as strings
             callsArray = vapiCampaign.calls.map((call: unknown) => {
               if (typeof call === "string") {
                 return JSON.parse(call) as VapiCall;
@@ -168,7 +165,6 @@ export async function GET(
       console.error("Error fetching campaign from VAPI:", error);
     }
 
-    // Method 2: Fallback to general calls endpoint
     if (callsArray.length === 0) {
       try {
         const callsResponse = await fetch(
@@ -202,13 +198,11 @@ export async function GET(
       (acc, call) => {
         acc.totalCalls++;
 
-        // Calculate duration
         const duration = calculateCallDuration(call.startedAt, call.endedAt);
         if (duration > 0) {
           acc.totalCallDuration += duration;
         }
 
-        // Categorize calls
         if (call.status === "ended") {
           acc.completedCalls++;
 
@@ -221,7 +215,6 @@ export async function GET(
             acc.answeredCalls++;
           }
 
-          // Check for successful calls
           if (call.analysis?.successEvaluation === "true") {
             acc.successfulCalls++;
           }
@@ -247,7 +240,6 @@ export async function GET(
       }
     );
 
-    // Calculate percentages and averages
     callAnalytics.averageCallDuration =
       callAnalytics.completedCalls > 0
         ? callAnalytics.totalCallDuration / callAnalytics.completedCalls
@@ -331,7 +323,7 @@ export async function GET(
       },
     };
 
-    // Get recent calls (last 10)
+    // Recent calls (last 10)
     const recentCalls = callsArray
       .sort((a, b) => {
         const dateA = a.startedAt ? new Date(a.startedAt).getTime() : 0;
