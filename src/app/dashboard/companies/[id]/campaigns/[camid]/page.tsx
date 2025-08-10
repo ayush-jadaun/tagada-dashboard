@@ -1,147 +1,131 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 import React, { useState, useEffect } from 'react';
-import { Phone, Users, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, BarChart3, Eye, Pause, Play, Trash2 } from 'lucide-react';
+import { Phone, Users, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, BarChart3, Eye, Calendar, Building } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
+interface Company {
+  _id: string;
+  name: string;
+}
+
+interface Campaign {
+  _id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt?: string;
+  status: string;
+  total_contacts: number;
+  company_id: Company;
+  csvUrl?: string;
+  vapiCampaignId?: string;
+  vapiData?: {
+    counters?: { [key: string]: number };
+    endedReason?: string;
+  };
+  csv_stats?: {
+    totalRows?: number;
+    validContacts?: number;
+    summary?: {
+      totalAmount?: number;
+      averageAmount?: number;
+    };
+  };
+}
+
+interface CallAnalytics {
+  totalCalls?: number;
+  answeredCalls?: number;
+  unansweredCalls?: number;
+  successfulCalls?: number;
+  answerRate?: number;
+  successRate?: number;
+  completionRate?: number;
+  averageCallDuration?: number;
+  totalCallDuration?: number;
+}
+
+interface OutcomeAnalytics {
+  endReasonBreakdown?: { [key: string]: number };
+  mostCommonEndReason?: string;
+}
+
+interface TimeBasedAnalytics {
+  peakCallHour?: string;
+  peakCallDay?: string;
+}
+
+interface Analytics {
+  callAnalytics?: CallAnalytics;
+  outcomeAnalytics?: OutcomeAnalytics;
+  timeBasedAnalytics?: TimeBasedAnalytics;
+  recentCalls?: any[];
+  generatedAt?: string;
+}
+
+interface CallsData {
+  calls?: any[];
+  stats?: {
+    totalCalls?: number;
+    answeredCalls?: number;
+    voicemailCalls?: number;
+  };
+  pagination?: {
+    page?: number;
+    totalPages?: number;
+    total?: number;
+  };
+}
+
+interface Status {
+  localStatus?: string;
+  vapiStatus?: string;
+  lastUpdated?: string;
+  stats?: {
+    totalCalls?: number;
+  };
+}
+
+interface CallData {
+  id?: string;
+  customer?: {
+    name?: string;
+    number?: string;
+    assistantOverrides?: {
+      variableValues?: {
+        formattedAmount?: string;
+      };
+    };
+  };
+  status?: string;
+  endedReason?: string;
+}
 const CampaignDetailPage = () => {
   const params = useParams();
-  const campaignId = params.camid
-  const [campaign, setCampaign] = useState(null);
+  const campaignId = params.camid;
+  const [campaign, setCampaign] = useState<Campaign>();
   const [status, setStatus] = useState(null);
+  const [callsData, setCallsData] = useState(null);
   const [calls, setCalls] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
-  const [callsPage, setCallsPage] = useState(1);
-  const [callsPagination, setCallsPagination] = useState(null);
+  const [error, setError] = useState(null);
 
-  // Mock data for demonstration
-  const mockCampaign = {
-    _id: campaignId,
-    name: 'Q4 Sales Outreach Campaign',
-    description: 'Automated sales calls to warm leads for Q4 product launch',
-    status: 'active',
-    total_contacts: 1250,
-    createdAt: '2024-01-15T10:00:00Z',
-    company_id: {
-      name: 'TechCorp Solutions',
-      _id: '674a123456789abcdef12344'
-    },
-    vapiCampaignId: 'vapi_674b123456789abcdef12345'
-  };
+const CampaignDetailPage: React.FC = () => {
+  const params = useParams();
+  const campaignId = params.camid as string;
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
+  const [callsData, setCallsData] = useState<CallsData | null>(null);
+  const [calls, setCalls] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const mockStatus = {
-    localStatus: 'active',
-    vapiStatus: 'active',
-    stats: {
-      totalCalls: 485,
-      completedCalls: 342,
-      failedCalls: 28,
-      inProgressCalls: 115
-    },
-    lastUpdated: new Date().toISOString()
-  };
-
-  const mockCalls = [
-    {
-      id: 'call_001',
-      phoneNumber: '+1 (555) 123-4567',
-      status: 'completed',
-      duration: 245,
-      createdAt: '2024-01-20T14:30:00Z',
-      endedReason: 'customer-ended-call'
-    },
-    {
-      id: 'call_002',
-      phoneNumber: '+1 (555) 234-5678',
-      status: 'failed',
-      duration: 0,
-      createdAt: '2024-01-20T14:25:00Z',
-      endedReason: 'no-answer'
-    },
-    {
-      id: 'call_003',
-      phoneNumber: '+1 (555) 345-6789',
-      status: 'in-progress',
-      duration: 78,
-      createdAt: '2024-01-20T14:40:00Z',
-      endedReason: null
-    },
-    {
-      id: 'call_004',
-      phoneNumber: '+1 (555) 456-7890',
-      status: 'completed',
-      duration: 189,
-      createdAt: '2024-01-20T14:20:00Z',
-      endedReason: 'assistant-ended-call'
-    },
-    {
-      id: 'call_005',
-      phoneNumber: '+1 (555) 567-8901',
-      status: 'completed',
-      duration: 312,
-      createdAt: '2024-01-20T14:15:00Z',
-      endedReason: 'customer-ended-call'
-    }
-  ];
-
-  const mockAnalytics = {
-    campaign: {
-      id: campaignId,
-      name: 'Q4 Sales Outreach Campaign',
-      description: 'Automated sales calls to warm leads for Q4 product launch',
-      status: 'active',
-      totalContacts: 1250,
-      createdAt: '2024-01-15T10:00:00Z'
-    },
-    vapi: {
-      totalCalls: 485,
-      completedCalls: 342,
-      failedCalls: 28,
-      inProgressCalls: 115,
-      averageCallDuration: 198.5,
-      callsByHour: [12, 18, 25, 31, 28, 45, 52, 48, 38, 29, 22, 15],
-      callsByStatus: {
-        completed: 342,
-        failed: 28,
-        inProgress: 115
-      }
-    },
-    summary: {
-      totalCalls: 485,
-      completedCalls: 342,
-      failedCalls: 28,
-      inProgressCalls: 115,
-      averageCallDuration: 198.5,
-      successRate: '70.52'
-    }
-  };
-
-  useEffect(() => {
-    // Simulate API calls
-    const fetchData = async () => {
-      setLoading(true);
-      console.log("campaign id:", campaignId);
-      // Simulate network delay
-      await  Promise.all([fetchCampaign(), fetchStatus(), fetchCall(), fetchAnalytics()]);
-      
-      // setCampaign(mockCampaign);
-      // setStatus(mockStatus);
-      // setCalls(mockCalls);
-      // setAnalytics(mockAnalytics);
-      setCallsPagination({
-        page: 1,
-        limit: 10,
-        total: 485,
-        totalPages: 49
-      });
-      
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [campaignId]);
-  async function fetchCampaign(){
+  async function fetchCampaign() {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}`);
       if (!response.ok) {
@@ -149,89 +133,115 @@ const CampaignDetailPage = () => {
       }
       const campaignData = await response.json();
       setCampaign(campaignData);
-      console.log( "campaign details:", campaignData);
+      console.log("campaign details:", campaignData);
     } catch (err) {
-      // setError(err instanceof Error ? err.message : 'Failed to fetch campaign details');
-    console.log(err)
-    } 
+      console.error("Error fetching campaign:", err);
+      throw err;
+    }
   }
-  async function fetchCall(){
+
+  async function fetchCalls() {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/calls`);
       if (!response.ok) {
-        throw new Error('Failed to fetch campaign details');
+        throw new Error('Failed to fetch calls data');
       }
       const callData = await response.json();
-      setCalls(callData);
+      setCallsData(callData);
+      setCalls(callData.calls || []);
+      console.log("calls data:", callData);
     } catch (err) {
-      // setError(err instanceof Error ? err.message : 'Failed to fetch campaign details');
-    console.log(err)
+      console.error("Error fetching calls:", err);
+      throw err;
     }
-
   }
-  async function fetchAnalytics(){
+
+  async function fetchAnalytics() {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/analytics`);
       if (!response.ok) {
-        throw new Error('Failed to fetch campaign details');
+        throw new Error('Failed to fetch analytics data');
       }
       const analyticsData = await response.json();
+      console.log("analytics details:", analyticsData);
       setAnalytics(analyticsData);
     } catch (err) {
-      // setError(err instanceof Error ? err.message : 'Failed to fetch campaign details');
-    console.log(err)
+      console.error("Error fetching analytics:", err);
+      throw err;
     }
-  };
-  async function fetchStatus(){
+  }
+
+  async function fetchStatus() {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/status`);
       if (!response.ok) {
-        throw new Error('Failed to fetch campaign details');
+        throw new Error('Failed to fetch status data');
       }
       const statusData = await response.json();
+      console.log("status details:", statusData);
       setStatus(statusData);
     } catch (err) {
-      // setError(err instanceof Error ? err.message : 'Failed to fetch campaign details');
-    console.log(err)
+      console.error("Error fetching status:", err);
+      throw err;
     }
-  };
+  }
 
-  const formatDuration = (seconds) => {
+  const formatDuration = (seconds: number) => {
+    if (!seconds || seconds === 0) return '--';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '--';
+    return new Date(dateString).toLocaleString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
-  const getStatusIcon = (status) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'ended':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
       case 'failed':
-        return <XCircle className="w-4 h-4 text-red-500" />;
+        return <XCircle className="w-4 h-4 text-red-600" />;
       case 'in-progress':
-        return <Clock className="w-4 h-4 text-blue-500" />;
+      case 'active':
+        return <Clock className="w-4 h-4 text-blue-600" />;
       default:
         return <AlertCircle className="w-4 h-4 text-gray-500" />;
     }
   };
 
-  const getStatusBadge = (status) => {
-    const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
+  const getStatusBadge = (status: string) => {
+    const baseClasses = "px-3 py-1 rounded-full text-xs font-medium border";
     switch (status) {
       case 'active':
-        return `${baseClasses} bg-green-100 text-green-800`;
+        return `${baseClasses} bg-blue-50 text-blue-700 border-blue-200`;
       case 'paused':
-        return `${baseClasses} bg-yellow-100 text-yellow-800`;
-      case 'completed':
-        return `${baseClasses} bg-blue-100 text-blue-800`;
+        return `${baseClasses} bg-yellow-50 text-yellow-700 border-yellow-200`;
+      case 'ended':
+        return `${baseClasses} bg-green-50 text-green-700 border-green-200`;
       case 'failed':
-        return `${baseClasses} bg-red-100 text-red-800`;
+        return `${baseClasses} bg-red-50 text-red-700 border-red-200`;
       default:
-        return `${baseClasses} bg-gray-100 text-gray-800`;
+        return `${baseClasses} bg-gray-50 text-gray-700 border-gray-200`;
+    }
+  };
+
+  const parseCallData = (callString: string) => {
+    try {
+      if (typeof callString === 'string') {
+        return JSON.parse(callString);
+      }
+      return callString;
+    } catch {
+      return callString;
     }
   };
 
@@ -239,47 +249,69 @@ const CampaignDetailPage = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
           <p className="text-gray-600">Loading campaign details...</p>
         </div>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Campaign</h3>
+          <p className="text-gray-600">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if(!campaign){
+        return (
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="flex flex-col items-center space-y-4">
+              <p className="text-gray-600 text-5xl">No campaign ...</p>
+            </div>
+          </div>
+        )
+      }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+    
+      <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{campaign?.name}</h1>
-                <p className="text-gray-600 mt-1">{campaign?.description}</p>
-                <div className="flex items-center space-x-4 mt-3">
+                <h1 className="text-3xl font-bold text-gray-900">{campaign?.name || 'Loading...'}</h1>
+                <p className="text-gray-600 mt-2 text-lg">{campaign?.description || 'Loading description...'}</p>
+                <div className="flex items-center flex-wrap gap-4 mt-4">
                   <span className={getStatusBadge(campaign?.status)}>
-                    {campaign?.status?.charAt(0).toUpperCase() + campaign?.status?.slice(1)}
+                    {campaign?.status?.charAt(0).toUpperCase() + campaign?.status?.slice(1) || 'Unknown'}
                   </span>
-                  <span className="text-sm text-gray-500">
-                    Company: {campaign?.company_id?.name}
-                  </span>
-                  <span className="text-sm text-gray-500">
-                    Created: {formatDate(campaign?.createdAt)}
-                  </span>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Building className="w-4 h-4 mr-1" />
+                    {campaign?.company_id?.name || 'N/A'}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    Created {formatDate(campaign?.createdAt)}
+                  </div>
                 </div>
               </div>
-              <div className="flex space-x-2">
-                <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <div className="flex space-x-3">
+                <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
                   <Eye className="w-4 h-4 mr-2" />
                   View Details
-                </button>
-                <button className="flex items-center px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
-                  <Pause className="w-4 h-4 mr-2" />
-                  Pause
-                </button>
-                <button className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
                 </button>
               </div>
             </div>
@@ -290,51 +322,67 @@ const CampaignDetailPage = () => {
       {/* Stats Cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center">
-              <Phone className="w-8 h-8 text-blue-600" />
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <Phone className="w-6 h-6 text-blue-600" />
+              </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Calls</p>
-                <p className="text-2xl font-bold text-gray-900">{status?.stats?.totalCalls || 0}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {callsData?.stats?.totalCalls || status?.stats?.totalCalls || 0}
+                </p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center">
-              <CheckCircle className="w-8 h-8 text-green-600" />
+              <div className="p-3 bg-green-50 rounded-lg">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Completed</p>
-                <p className="text-2xl font-bold text-gray-900">{status?.stats?.completedCalls || 0}</p>
+                <p className="text-sm font-medium text-gray-600">Answered</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {callsData?.stats?.answeredCalls || analytics?.callAnalytics?.answeredCalls || 0}
+                </p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center">
-              <Clock className="w-8 h-8 text-blue-600" />
+              <div className="p-3 bg-yellow-50 rounded-lg">
+                <Users className="w-6 h-6 text-yellow-600" />
+              </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">In Progress</p>
-                <p className="text-2xl font-bold text-gray-900">{status?.stats?.inProgressCalls || 0}</p>
+                <p className="text-sm font-medium text-gray-600">Voicemails</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {callsData?.stats?.voicemailCalls || campaign?.vapiData?.counters?.endedVoicemail || 0}
+                </p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center">
-              <TrendingUp className="w-8 h-8 text-green-600" />
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-purple-600" />
+              </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Success Rate</p>
-                <p className="text-2xl font-bold text-gray-900">{analytics?.summary?.successRate}%</p>
+                <p className="text-sm font-medium text-gray-600">Answer Rate</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {analytics?.callAnalytics?.answerRate || 0}%
+                </p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 px-6">
+            <nav className="flex space-x-8 px-6">
               {[
                 { id: 'overview', name: 'Overview', icon: BarChart3 },
                 { id: 'calls', name: 'Call History', icon: Phone },
@@ -349,7 +397,7 @@ const CampaignDetailPage = () => {
                       activeTab === tab.id
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2`}
+                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors`}
                   >
                     <Icon className="w-4 h-4" />
                     <span>{tab.name}</span>
@@ -362,44 +410,66 @@ const CampaignDetailPage = () => {
           <div className="p-6">
             {/* Overview Tab */}
             {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Campaign Information</h3>
-                    <dl className="space-y-3">
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Campaign ID</dt>
-                        <dd className="text-sm text-gray-900">{campaign?._id}</dd>
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-semibold text-gray-900">Campaign Information</h3>
+                    <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <dt className="text-sm font-medium text-gray-600">Campaign ID</dt>
+                          <dd className="text-sm text-gray-900 font-mono mt-1">{campaign?._id || 'N/A'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-sm font-medium text-gray-600">VAPI Campaign ID</dt>
+                          <dd className="text-sm text-gray-900 font-mono mt-1">{campaign?.vapiCampaignId || 'N/A'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-sm font-medium text-gray-600">Total Contacts</dt>
+                          <dd className="text-sm text-gray-900 mt-1">{campaign?.total_contacts?.toLocaleString() || 0}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-sm font-medium text-gray-600">Valid Contacts</dt>
+                          <dd className="text-sm text-gray-900 mt-1">{campaign?.csv_stats?.validContacts || 0}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-sm font-medium text-gray-600">Created At</dt>
+                          <dd className="text-sm text-gray-900 mt-1">{formatDate(campaign?.createdAt)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-sm font-medium text-gray-600">Updated At</dt>
+                          <dd className="text-sm text-gray-900 mt-1">{formatDate(campaign?.updatedAt)}</dd>
+                        </div>
                       </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">VAPI Campaign ID</dt>
-                        <dd className="text-sm text-gray-900">{campaign?.vapiCampaignId}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Total Contacts</dt>
-                        <dd className="text-sm text-gray-900">{campaign?.total_contacts?.toLocaleString()}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Average Call Duration</dt>
-                        <dd className="text-sm text-gray-900">{formatDuration(analytics?.summary?.averageCallDuration || 0)}</dd>
-                      </div>
-                    </dl>
+                    </div>
                   </div>
                   
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Status Sync</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm font-medium text-gray-600">Local Status</span>
-                        <span className={getStatusBadge(status?.localStatus)}>
-                          {status?.localStatus}
-                        </span>
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-semibold text-gray-900">Status & Sync</h3>
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-600">Local Status</span>
+                          <span className={getStatusBadge(status?.localStatus)}>
+                            {status?.localStatus || 'Unknown'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm font-medium text-gray-600">VAPI Status</span>
-                        <span className={getStatusBadge(status?.vapiStatus)}>
-                          {status?.vapiStatus}
-                        </span>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-600">VAPI Status</span>
+                          <span className={getStatusBadge(status?.vapiStatus)}>
+                            {status?.vapiStatus || 'Unknown'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-600">End Reason</span>
+                          <span className="text-sm text-gray-900">
+                            {campaign?.vapiData?.endedReason?.replace(/\./g, ' ') || '--'}
+                          </span>
+                        </div>
                       </div>
                       <div className="text-xs text-gray-500">
                         Last updated: {formatDate(status?.lastUpdated)}
@@ -407,6 +477,21 @@ const CampaignDetailPage = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* VAPI Counters */}
+                {campaign?.vapiData?.counters && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Call Distribution</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      {Object.entries(campaign.vapiData.counters).map(([key, value]) => (
+                        <div key={key} className="bg-gray-50 rounded-lg p-4 text-center">
+                          <div className="text-2xl font-bold text-gray-900">{value}</div>
+                          <div className="text-sm text-gray-600 capitalize">{key}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -414,161 +499,285 @@ const CampaignDetailPage = () => {
             {activeTab === 'calls' && (
               <div>
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-medium text-gray-900">Call History</h3>
-                  <div className="text-sm text-gray-500">
-                    Showing {calls.length} of {callsPagination?.total} calls
+                  <h3 className="text-lg font-semibold text-gray-900">Call History</h3>
+                  <div className="text-sm text-gray-600">
+                    Showing {calls.length} of {callsData?.pagination?.total || 0} calls
                   </div>
                 </div>
                 
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Phone Number
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Duration
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Started At
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          End Reason
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {calls.map((call) => (
-                        <tr key={call.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {call.phoneNumber}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center space-x-2">
-                              {getStatusIcon(call.status)}
-                              <span className="text-sm text-gray-900 capitalize">
-                                {call.status.replace('-', ' ')}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {call.duration > 0 ? formatDuration(call.duration) : '--'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(call.createdAt)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {call.endedReason ? call.endedReason.replace('-', ' ') : '--'}
-                          </td>
+                {!calls || calls.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Phone className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No calls found</h3>
+                    <p className="text-gray-600">This campaign hasn't made any calls yet.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+                    <table className="min-w-full divide-y divide-gray-300">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Customer
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Phone Number
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            End Reason
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {calls.map((callString, index) => {
+                          const call = parseCallData(callString);
+                          return (
+                            <tr key={call.id || index} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="font-medium text-gray-900">
+                                  {call.customer?.name || '--'}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {call.customer?.number || '--'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center space-x-2">
+                                  {getStatusIcon(call.status)}
+                                  <span className="text-sm text-gray-900 capitalize">
+                                    {call.status?.replace('-', ' ') || 'Unknown'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                {call.endedReason ? call.endedReason.replace('-', ' ') : '--'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {call.customer?.assistantOverrides?.variableValues?.formattedAmount || '--'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
-                {/* Pagination */}
-                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4">
-                  <div className="flex-1 flex justify-between sm:hidden">
-                    <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                      Previous
-                    </button>
-                    <button className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                      Next
-                    </button>
-                  </div>
-                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm text-gray-700">
-                        Showing page <span className="font-medium">{callsPagination?.page}</span> of{' '}
-                        <span className="font-medium">{callsPagination?.totalPages}</span>
-                      </p>
+                {callsData?.pagination && callsData.pagination.totalPages > 1 && (
+                  <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4">
+                    <div className="flex-1 flex justify-between sm:hidden">
+                      <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        Previous
+                      </button>
+                      <button className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        Next
+                      </button>
                     </div>
-                    <div>
-                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                        <button className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                          Previous
-                        </button>
-                        <button className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                          Next
-                        </button>
-                      </nav>
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-700">
+                          Showing page <span className="font-medium">{callsData.pagination.page}</span> of{' '}
+                          <span className="font-medium">{callsData.pagination.totalPages}</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
             {/* Analytics Tab */}
             {activeTab === 'analytics' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Campaign Analytics</h3>
+              <div className="space-y-8">
+                <h3 className="text-lg font-semibold text-gray-900">Campaign Analytics</h3>
                 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 rounded-lg p-6">
-                    <h4 className="text-md font-medium text-gray-900 mb-4">Call Distribution</h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                          <span className="text-sm text-gray-700">Completed</span>
+                {!analytics ? (
+                  <div className="text-center py-12">
+                    <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No analytics available</h3>
+                    <p className="text-gray-600">Analytics data is not yet available for this campaign.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      <div className="bg-gray-50 rounded-lg p-6">
+                        <h4 className="text-md font-medium text-gray-900 mb-6">Call Analytics</h4>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between py-2">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                              <span className="text-sm text-gray-700">Total Calls</span>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {analytics?.callAnalytics?.totalCalls || 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between py-2">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                              <span className="text-sm text-gray-700">Answered</span>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {analytics?.callAnalytics?.answeredCalls || 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between py-2">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                              <span className="text-sm text-gray-700">Unanswered</span>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {analytics?.callAnalytics?.unansweredCalls || 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between py-2">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                              <span className="text-sm text-gray-700">Successful</span>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {analytics?.callAnalytics?.successfulCalls || 0}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-sm font-medium text-gray-900">
-                          {analytics?.vapi?.completedCalls} ({((analytics?.vapi?.completedCalls / analytics?.vapi?.totalCalls) * 100).toFixed(1)}%)
-                        </span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                          <span className="text-sm text-gray-700">In Progress</span>
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">
-                          {analytics?.vapi?.inProgressCalls} ({((analytics?.vapi?.inProgressCalls / analytics?.vapi?.totalCalls) * 100).toFixed(1)}%)
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                          <span className="text-sm text-gray-700">Failed</span>
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">
-                          {analytics?.vapi?.failedCalls} ({((analytics?.vapi?.failedCalls / analytics?.vapi?.totalCalls) * 100).toFixed(1)}%)
-                        </span>
+                      
+                      <div className="bg-gray-50 rounded-lg p-6">
+                        <h4 className="text-md font-medium text-gray-900 mb-6">Performance Metrics</h4>
+                        <dl className="space-y-4">
+                          <div className="flex justify-between py-2">
+                            <dt className="text-sm text-gray-600">Answer Rate</dt>
+                            <dd className="text-sm font-medium text-gray-900">{analytics?.callAnalytics?.answerRate || 0}%</dd>
+                          </div>
+                          <div className="flex justify-between py-2">
+                            <dt className="text-sm text-gray-600">Success Rate</dt>
+                            <dd className="text-sm font-medium text-gray-900">{analytics?.callAnalytics?.successRate || 0}%</dd>
+                          </div>
+                          <div className="flex justify-between py-2">
+                            <dt className="text-sm text-gray-600">Completion Rate</dt>
+                            <dd className="text-sm font-medium text-gray-900">{analytics?.callAnalytics?.completionRate || 0}%</dd>
+                          </div>
+                          <div className="flex justify-between py-2">
+                            <dt className="text-sm text-gray-600">Avg Call Duration</dt>
+                            <dd className="text-sm font-medium text-gray-900">
+                              {formatDuration(analytics?.callAnalytics?.averageCallDuration)}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between py-2">
+                            <dt className="text-sm text-gray-600">Total Duration</dt>
+                            <dd className="text-sm font-medium text-gray-900">
+                              {formatDuration(analytics?.callAnalytics?.totalCallDuration)}
+                            </dd>
+                          </div>
+                        </dl>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="bg-gray-50 rounded-lg p-6">
-                    <h4 className="text-md font-medium text-gray-900 mb-4">Performance Metrics</h4>
-                    <dl className="space-y-3">
-                      <div className="flex justify-between">
-                        <dt className="text-sm text-gray-600">Success Rate</dt>
-                        <dd className="text-sm font-medium text-gray-900">{analytics?.summary?.successRate}%</dd>
+
+                    {/* End Reason Breakdown */}
+                    {analytics?.outcomeAnalytics?.endReasonBreakdown && (
+                      <div className="bg-gray-50 rounded-lg p-6">
+                        <h4 className="text-md font-medium text-gray-900 mb-6">End Reason Breakdown</h4>
+                        <div className="space-y-3">
+                          {Object.entries(analytics.outcomeAnalytics.endReasonBreakdown).map(([reason, count]) => (
+                            <div key={reason} className="flex items-center justify-between py-2">
+                              <span className="text-sm text-gray-700 capitalize">
+                                {reason.replace('-', ' ').replace('customer', 'Customer').replace('assistant', 'Assistant')}
+                              </span>
+                              <span className="text-sm font-medium text-gray-900">{count}</span>
+                            </div>
+                          ))}
+                          {analytics?.outcomeAnalytics?.mostCommonEndReason && (
+                            <div className="mt-4 pt-4 border-t border-gray-300">
+                              <div className="flex justify-between">
+                                <span className="text-sm font-medium text-gray-600">Most Common End Reason</span>
+                                <span className="text-sm font-medium text-gray-900 capitalize">
+                                  {analytics.outcomeAnalytics.mostCommonEndReason.replace('-', ' ')}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm text-gray-600">Avg Call Duration</dt>
-                        <dd className="text-sm font-medium text-gray-900">
-                          {formatDuration(analytics?.summary?.averageCallDuration)}
-                        </dd>
+                    )}
+
+                    {/* Time-based Analytics */}
+                    {(analytics?.timeBasedAnalytics?.peakCallHour !== 'Unknown' || analytics?.timeBasedAnalytics?.peakCallDay !== 'Unknown') && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h4 className="text-md font-medium text-gray-900 mb-4">Peak Hours</h4>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {analytics?.timeBasedAnalytics?.peakCallHour || '--'}
+                            </div>
+                            <div className="text-sm text-gray-600">Peak Call Hour</div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h4 className="text-md font-medium text-gray-900 mb-4">Peak Day</h4>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {analytics?.timeBasedAnalytics?.peakCallDay || '--'}
+                            </div>
+                            <div className="text-sm text-gray-600">Peak Call Day</div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm text-gray-600">Total Contacts</dt>
-                        <dd className="text-sm font-medium text-gray-900">
-                          {campaign?.total_contacts?.toLocaleString()}
-                        </dd>
+                    )}
+
+                    {/* Recent Calls Summary */}
+                    {analytics?.recentCalls && analytics.recentCalls.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-6">
+                        <h4 className="text-md font-medium text-gray-900 mb-4">Recent Call Summary</h4>
+                        <div className="text-sm text-gray-600">
+                          <p>Generated at: {formatDate(analytics?.generatedAt)}</p>
+                          <p className="mt-2">
+                            Latest activity shows {analytics.recentCalls.length} recent call(s) with 
+                            the most common outcome being "{analytics?.outcomeAnalytics?.mostCommonEndReason?.replace('-', ' ')}"
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm text-gray-600">Coverage</dt>
-                        <dd className="text-sm font-medium text-gray-900">
-                          {((analytics?.vapi?.totalCalls / campaign?.total_contacts) * 100).toFixed(1)}%
-                        </dd>
+                    )}
+
+                    {/* CSV Stats */}
+                    {campaign?.csv_stats && (
+                      <div className="bg-gray-50 rounded-lg p-6">
+                        <h4 className="text-md font-medium text-gray-900 mb-6">CSV Statistics</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {campaign.csv_stats.totalRows || 0}
+                            </div>
+                            <div className="text-sm text-gray-600">Total Rows</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {campaign.csv_stats.validContacts || 0}
+                            </div>
+                            <div className="text-sm text-gray-600">Valid Contacts</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {campaign.csv_stats.summary?.totalAmount?.toLocaleString('en-IN') || 0}
+                            </div>
+                            <div className="text-sm text-gray-600">Total Amount</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {campaign.csv_stats.summary?.averageAmount?.toLocaleString('en-IN') || 0}
+                            </div>
+                            <div className="text-sm text-gray-600">Average Amount</div>
+                          </div>
+                        </div>
                       </div>
-                    </dl>
-                  </div>
-                </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>

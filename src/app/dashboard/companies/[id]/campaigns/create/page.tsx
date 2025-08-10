@@ -1,4 +1,3 @@
-// app/dashboard/companies/[id]/campaigns/create/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -19,12 +18,25 @@ interface CampaignFormData {
   csvUrl: string
 }
 
+interface LoadingState {
+  fetchingCompany: boolean
+  uploadingCsv: boolean
+  creatingCampaign: boolean
+}
+
+interface ApiError {
+  error?: string
+  message?: string
+}
+
 export default function CreateCampaignPage({ params }: CreateCampaignPageProps) {
   const [company, setCompany] = useState<Company | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [uploadingCsv, setUploadingCsv] = useState(false)
+  const [loadingState, setLoadingState] = useState<LoadingState>({
+    fetchingCompany: true,
+    uploadingCsv: false,
+    creatingCampaign: false,
+  })
 
   const [formData, setFormData] = useState<CampaignFormData>({
     name: '',
@@ -35,27 +47,35 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
 
   const router = useRouter()
 
+  const isSubmitting = loadingState.uploadingCsv || loadingState.creatingCampaign
+
   useEffect(() => {
     fetchCompanyDetails()
   }, [params.id])
 
-  const fetchCompanyDetails = async () => {
+  const fetchCompanyDetails = async (): Promise<void> => {
     try {
-      setLoading(true)
+      setLoadingState(prev => ({ ...prev, fetchingCompany: true }))
       const response = await fetch(`/api/companies/${params.id}`)
+      
       if (!response.ok) {
         throw new Error('Failed to fetch company details')
       }
-      const companyData = await response.json()
+      
+      const companyData: Company = await response.json()
       setCompany(companyData)
+      setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch company details')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch company details'
+      setError(errorMessage)
     } finally {
-      setLoading(false)
+      setLoadingState(prev => ({ ...prev, fetchingCompany: false }))
     }
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ): void => {
     const { name, value, type } = e.target
     setFormData(prev => ({
       ...prev,
@@ -63,7 +83,7 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
     }))
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -73,7 +93,8 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
       return
     }
 
-    setFormData(prev => ({ ...prev, csvFile: file }))   
+    setError(null)
+    setFormData(prev => ({ ...prev, csvFile: file, csvUrl: '' }))   
   }
 
   const uploadCsvFile = async (file: File): Promise<string> => {
@@ -87,32 +108,45 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
     })
 
     if (!response.ok) {
-      throw new Error('Failed to upload CSV file')
+      const errorData: ApiError = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || 'Failed to upload CSV file')
     }
 
-    const data = await response.json()
+    const data: { url: string } = await response.json()
     return data.url
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
-    setSubmitting(true)
     setError(null)
+
+    // Validation
+    if (!formData.name.trim()) {
+      setError('Campaign name is required')
+      return
+    }
+
+    if (!formData.csvFile && !formData.csvUrl.trim()) {
+      setError('Please provide either a CSV file or CSV URL')
+      return
+    }
 
     try {
       let csvUrl = formData.csvUrl
 
       // Upload CSV file if one was selected
       if (formData.csvFile) {
-        setUploadingCsv(true)
+        setLoadingState(prev => ({ ...prev, uploadingCsv: true }))
         csvUrl = await uploadCsvFile(formData.csvFile)
-        setUploadingCsv(false);
+        setLoadingState(prev => ({ ...prev, uploadingCsv: false }))
       }
 
       // Create campaign
+      setLoadingState(prev => ({ ...prev, creatingCampaign: true }))
+      
       const campaignData = {
-        name: formData.name,
-        description: formData.description,
+        name: formData.name.trim(),
+        description: formData.description.trim(),
         csvUrl,
         company_id: params.id
       }
@@ -122,236 +156,330 @@ export default function CreateCampaignPage({ params }: CreateCampaignPageProps) 
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(
-          campaignData
-)
+        body: JSON.stringify(campaignData)
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData: ApiError = await response.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to create campaign')
       }
 
-      const newCampaign = await response.json()
+      const newCampaign: { campaign: { _id: string } } = await response.json()
       
       // Redirect to campaign detail page
       router.push(`/dashboard/companies/${params.id}/campaigns/${newCampaign.campaign._id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while creating the campaign'
+      setError(errorMessage)
     } finally {
-      setSubmitting(false)
-      setUploadingCsv(false)
+      setLoadingState(prev => ({ 
+        ...prev, 
+        uploadingCsv: false, 
+        creatingCampaign: false 
+      }))
     }
   }
 
-  if (loading) {
+  const removeSelectedFile = (): void => {
+    setFormData(prev => ({ ...prev, csvFile: null }))
+  }
+
+  // Loading state for initial company fetch
+  if (loadingState.fetchingCompany) {
     return (
-      <div className="px-4 py-6 sm:px-0">
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="animate-spin rounded-full h-10 w-10 border-3 border-blue-200 border-t-blue-600"></div>
+              <p className="text-gray-600 font-medium">Loading company details...</p>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
+  // Error state when company couldn't be loaded
   if (error && !company) {
     return (
-      <div className="px-4 py-6 sm:px-0">
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="text-red-700">{error}</div>
-          <button
-            onClick={() => router.push('/dashboard/companies')}
-            className="mt-2 text-sm text-red-600 hover:text-red-800"
-          >
-            ← Back to Companies
-          </button>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+            <div className="flex items-center space-x-3">
+              <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-red-800 font-medium">{error}</div>
+            </div>
+            <button
+              onClick={() => router.push('/dashboard/companies')}
+              className="mt-4 inline-flex items-center text-sm font-medium text-red-600 hover:text-red-800 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Companies
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="px-4 py-6 sm:px-0">
-      {/* Breadcrumb */}
-      <nav className="flex mb-6" aria-label="Breadcrumb">
-        <ol className="inline-flex items-center space-x-1 md:space-x-3">
-          <li className="inline-flex items-center">
-            <Link href="/dashboard/companies" className="text-gray-700 hover:text-gray-900">
-              Companies
-            </Link>
-          </li>
-          <li>
-            <div className="flex items-center">
-              <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-              <Link href={`/dashboard/companies/${params.id}`} className="ml-1 text-gray-700 hover:text-gray-900 md:ml-2">
-                {company?.name}
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        {/* Breadcrumb */}
+        <nav className="flex mb-8" aria-label="Breadcrumb">
+          <ol className="inline-flex items-center space-x-1 md:space-x-2">
+            <li className="inline-flex items-center">
+              <Link 
+                href="/dashboard/companies" 
+                className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
+              >
+                Companies
               </Link>
-            </div>
-          </li>
-          <li>
-            <div className="flex items-center">
-              <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </li>
+            <li>
+              <div className="flex items-center">
+                <svg className="w-4 h-4 text-gray-400 mx-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
+                <Link 
+                  href={`/dashboard/companies/${params.id}`} 
+                  className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
+                >
+                  {company?.name}
+                </Link>
+              </div>
+            </li>
+            <li>
+              <div className="flex items-center">
+                <svg className="w-4 h-4 text-gray-400 mx-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
+                <span className="text-gray-700 text-sm font-medium">Create Campaign</span>
+              </div>
+            </li>
+          </ol>
+        </nav>
+
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create VAPI AI Campaign</h1>
+          <p className="text-gray-600 text-lg">
+            Create a new VAPI AI campaign for <span className="font-semibold text-gray-900">{company?.name}</span>
+          </p>
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center space-x-3">
+              <svg className="h-5 w-5 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="ml-1 text-gray-500 md:ml-2">Create Campaign</span>
+              <div className="text-red-700 font-medium">{error}</div>
             </div>
-          </li>
-        </ol>
-      </nav>
-
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Create VAPI AI Campaign</h1>
-        <p className="text-gray-600 mt-2">
-          Create a new VAPI AI campaign for {company?.name}
-        </p>
-      </div>
-
-      {/* Error Alert */}
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="text-red-700">{error}</div>
-        </div>
-      )}
-
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">Campaign Details</h2>
           </div>
-          
-          <div className="px-6 py-4 space-y-6">
-            {/* Campaign Name */}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Campaign Name *
-              </label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                required
-                value={formData.name}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Enter campaign name"
-              />
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Campaign Details Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <h2 className="text-lg font-semibold text-gray-900">Campaign Details</h2>
+              <p className="text-sm text-gray-600 mt-1">Basic information about your campaign</p>
             </div>
+            
+            <div className="px-6 py-6 space-y-6">
+              {/* Campaign Name */}
+              <div>
+                <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Campaign Name *
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  required
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition-colors"
+                  placeholder="Enter campaign name"
+                  disabled={isSubmitting}
+                />
+              </div>
 
-            {/* Description */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                Description
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                rows={3}
-                value={formData.description}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Enter campaign description"
-              />
-            </div>       
+              {/* Description */}
+              <div>
+                <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  rows={4}
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition-colors"
+                  placeholder="Describe your campaign goals and target audience"
+                  disabled={isSubmitting}
+                />
+              </div>       
+            </div>
           </div>
-        </div>
 
-        {/* Contacts Section */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">Contact List</h2>
-          </div>
-          
-          <div className="px-6 py-4 space-y-6">
-            {/* CSV File Upload */}
-            <div>
-              <label htmlFor="csvFile" className="block text-sm font-medium text-gray-700">
-                Upload CSV File
-              </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-gray-400">
-                <div className="space-y-1 text-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <div className="flex text-sm text-gray-600">
-                    <label htmlFor="csvFile" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
-                      <span>Upload a CSV file</span>
-                      <input
-                        id="csvFile"
-                        type="file"
-                        accept=".csv"
-                        onChange={handleFileChange}
-                        className="sr-only"
-                      />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
+          {/* Contact List Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <h2 className="text-lg font-semibold text-gray-900">Contact List</h2>
+              <p className="text-sm text-gray-600 mt-1">Upload your contact data as a CSV file or provide a URL</p>
+            </div>
+            
+            <div className="px-6 py-6 space-y-6">
+              {/* CSV File Upload */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Upload CSV File
+                </label>
+                
+                {!formData.csvFile ? (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors">
+                    <div className="px-6 py-8 text-center">
+                      <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <div className="text-gray-600">
+                        <label htmlFor="csvFile" className="cursor-pointer">
+                          <span className="font-semibold text-blue-600 hover:text-blue-700">Choose a CSV file</span>
+                          <span className="text-gray-500"> or drag and drop</span>
+                          <input
+                            id="csvFile"
+                            type="file"
+                            accept=".csv"
+                            onChange={handleFileChange}
+                            className="sr-only"
+                            disabled={isSubmitting}
+                          />
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-2">CSV files up to 10MB</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500">CSV files only</p>
-                  {formData.csvFile && (
-                    <p className="text-sm text-green-600 mt-2">
-                      Selected: {formData.csvFile.name}
-                    </p>
-                  )}
+                ) : (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div>
+                          <p className="font-medium text-green-800">{formData.csvFile.name}</p>
+                          <p className="text-sm text-green-600">
+                            {(formData.csvFile.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeSelectedFile}
+                        disabled={isSubmitting}
+                        className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                      >
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* OR Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500 font-medium">OR</span>
                 </div>
               </div>
+
+              {/* CSV URL */}
+              <div>
+                <label htmlFor="csvUrl" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Provide CSV URL
+                </label>
+                <input
+                  type="url"
+                  id="csvUrl"
+                  name="csvUrl"
+                  value={formData.csvUrl}
+                  onChange={handleInputChange}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition-colors"
+                  placeholder="https://example.com/contacts.csv"
+                  disabled={isSubmitting || !!formData.csvFile}
+                />
+                {formData.csvFile && (
+                  <p className="mt-2 text-sm text-gray-500">URL input is disabled when a file is selected</p>
+                )}
+              </div>            
             </div>
-
-            {/* CSV URL (Alternative) */}
-            <div>
-              <label htmlFor="csvUrl" className="block text-sm font-medium text-gray-700">
-                Or provide CSV URL
-              </label>
-              <input
-                type="url"
-                id="csvUrl"
-                name="csvUrl"
-                value={formData.csvUrl}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="https://example.com/contacts.csv"
-              />
-            </div>            
           </div>
-        </div>
 
-        {/* Form Actions */}
-        <div className="flex items-center justify-between">
-          <Link
-            href={`/dashboard/companies/${params.id}`}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            ← Back to {company?.name}
-          </Link>
-          
-          <div className="flex space-x-3">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          {/* Form Actions */}
+          <div className="flex items-center justify-between pt-6">
+            <Link
+              href={`/dashboard/companies/${params.id}`}
+              className="inline-flex items-center text-gray-600 hover:text-gray-900 font-medium transition-colors"
             >
-              Cancel
-            </button>
+              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to {company?.name}
+            </Link>
             
-            <button
-              type="submit"
-              disabled={submitting || uploadingCsv}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? (
-                <>
-                  {uploadingCsv ? 'Uploading CSV...' : 'Creating Campaign...'}
-                  <div className="inline-block ml-2 animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                </>
-              ) : (
-                'Create Campaign'
-              )}
-            </button>
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                disabled={isSubmitting}
+                className="px-6 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Cancel
+              </button>
+              
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-2 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center"
+              >
+                {loadingState.uploadingCsv ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-200 border-t-white mr-2"></div>
+                    Uploading CSV...
+                  </>
+                ) : loadingState.creatingCampaign ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-200 border-t-white mr-2"></div>
+                    Creating Campaign...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Create Campaign
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   )
 }
