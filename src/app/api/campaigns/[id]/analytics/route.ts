@@ -102,8 +102,7 @@ function getDayFromTimestamp(timestamp: string | null): string {
 export async function GET(
   request: NextRequest,
   context: {
-    params: { id: string };
-    searchParams?: Record<string, string | string[] | undefined>;
+    params: Promise<{ id: string }>;
   }
 ) {
   try {
