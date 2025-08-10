@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 export async function verifyToken(token: string): Promise<TokenPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload as TokenPayload
+    return payload as unknown as TokenPayload
   } catch (error) {
     console.error('Token verification failed:', error)
     return null
