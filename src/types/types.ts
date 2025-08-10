@@ -4,7 +4,7 @@ export interface Company {
   name: string
   email?: string
   createdAt: string
-  campaigns: string[] // Array of campaign IDs
+  campaigns: Campaign[] // Array of campaign IDs
   paymentLink?: string
 }
 

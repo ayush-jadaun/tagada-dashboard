@@ -1,161 +1,275 @@
-// app/dashboard/companies/create/page.tsx
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CreateCompanyData } from '@/types/types'
+import Link from 'next/link'
+import { Company } from '@/types/types'
 
-export default function CreateCompanyPage() {
-  const [formData, setFormData] = useState<CreateCompanyData>({
-    name: '',
-    email: '',
-    paymentLink: ''
-  })
-  const [loading, setLoading] = useState(false)
+interface LoadingState {
+  fetchingCompanies: boolean
+  navigatingToCompany: boolean
+}
+
+interface ApiError {
+  message?: string
+  error?: string
+}
+
+export default function ManageCompaniesPage() {
+  const [companies, setCompanies] = useState<Company[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [loadingState, setLoadingState] = useState<LoadingState>({
+    fetchingCompanies: true,
+    navigatingToCompany: false,
+  })
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
+  
   const router = useRouter()
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
+  useEffect(() => {
+    fetchCompanies()
+  }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!formData.name.trim()) {
-      setError('Company name is required')
-      return
-    }
-
+  const fetchCompanies = async (): Promise<void> => {
     try {
-      setLoading(true)
+      setLoadingState(prev => ({ ...prev, fetchingCompanies: true }))
       setError(null)
-
-      const response = await fetch('/api/companies', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: formData.name.trim(),
-          email: formData.email.trim() || undefined,
-          paymentLink: formData.paymentLink.trim() || undefined
-        })
-      })
-
+      
+      const response = await fetch('/api/companies')
+      
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || 'Failed to create company')
+        const errorData: ApiError = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || errorData.error || `Failed to fetch companies: ${response.statusText}`)
       }
-
-      const newCompany = await response.json()
-      router.push(`/dashboard/companies/${newCompany._id}`)
+      
+      const data: Company[] = await response.json()
+      setCompanies(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while fetching companies'
+      setError(errorMessage)
     } finally {
-      setLoading(false)
+      setLoadingState(prev => ({ ...prev, fetchingCompanies: false }))
     }
   }
 
-  const handleCancel = () => {
-    router.push('/dashboard/companies')
+  const handleCompanyClick = async (companyId: string): Promise<void> => {
+    try {
+      setLoadingState(prev => ({ ...prev, navigatingToCompany: true }))
+      setSelectedCompanyId(companyId)
+      router.push(`/dashboard/companies/${companyId}`)
+    } catch (err) {
+      // Handle navigation error if needed
+      setLoadingState(prev => ({ ...prev, navigatingToCompany: false }))
+      setSelectedCompanyId(null)
+    }
+  }
+
+  const formatDate = (dateString: string): string => {
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    } catch (err) {
+      return 'Invalid date'
+    }
+  }
+
+  const getTotalCampaigns = (company: Company): number => {
+    return company.campaigns?.length || 0
+  }
+
+  const handleRetryClick = (): void => {
+    fetchCompanies()
+  }
+
+  // Loading state for initial fetch
+  if (loadingState.fetchingCompanies) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="animate-spin rounded-full h-10 w-10 border-3 border-blue-200 border-t-blue-600"></div>
+              <p className="text-gray-600 font-medium">Loading companies...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <svg className="h-6 w-6 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h3 className="text-lg font-semibold text-red-800">Error Loading Companies</h3>
+                <p className="text-red-700 mt-1">{error}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleRetryClick}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="px-4 py-6 sm:px-0">
-      <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-1">
-          <div className="px-4 sm:px-0">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">Create Company</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Add a new company to manage VAPI AI campaigns.
-            </p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Companies</h1>
+              <p className="text-gray-600 mt-2">
+                Manage your companies and their VAPI AI campaigns.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/create"
+              className="inline-flex items-center px-6 py-3 border border-transparent rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Add Company
+            </Link>
           </div>
         </div>
-        
-        <div className="mt-5 md:col-span-2 md:mt-0">
-          <form onSubmit={handleSubmit}>
-            <div className="shadow sm:overflow-hidden sm:rounded-md">
-              <div className="space-y-6 bg-white px-4 py-5 sm:p-6">
-                {error && (
-                  <div className="rounded-md bg-red-50 p-4">
-                    <div className="text-sm text-red-700">{error}</div>
+
+        {/* Companies Content */}
+        {companies.length === 0 ? (
+          // Empty State
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+            <div className="text-center max-w-md mx-auto">
+              <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No companies yet</h3>
+              <p className="text-gray-600 mb-8">
+                Get started by creating your first company to manage VAPI AI campaigns effectively.
+              </p>
+              <Link
+                href="/dashboard/companies/create"
+                className="inline-flex items-center px-6 py-3 border border-transparent rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Create Your First Company
+              </Link>
+            </div>
+          </div>
+        ) : (
+          // Companies Grid
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {companies.map((company) => (
+              <div
+                key={company._id}
+                className={`bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all cursor-pointer overflow-hidden ${
+                  loadingState.navigatingToCompany && selectedCompanyId === company._id 
+                    ? 'ring-2 ring-blue-500 bg-blue-50' 
+                    : 'hover:border-gray-300'
+                }`}
+                onClick={() => handleCompanyClick(company._id)}
+              >
+                {loadingState.navigatingToCompany && selectedCompanyId === company._id && (
+                  <div className="bg-blue-100 px-6 py-3 border-b border-blue-200">
+                    <div className="flex items-center space-x-2 text-blue-700">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-300 border-t-blue-700"></div>
+                      <span className="text-sm font-medium">Loading company...</span>
+                    </div>
                   </div>
                 )}
-
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    Company Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    id="name"
-                    required
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-                    placeholder="Enter company name"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    id="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-                    placeholder="company@example.com"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="paymentLink" className="block text-sm font-medium text-gray-700">
-                    Payment Link
-                  </label>
-                  <input
-                    type="url"
-                    name="paymentLink"
-                    id="paymentLink"
-                    value={formData.paymentLink}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-                    placeholder="https://..."
-                  />
-                  <p className="mt-2 text-sm text-gray-500">
-                    Optional payment link for this company
-                  </p>
+                
+                <div className="p-6">
+                  <div className="flex items-start space-x-3">
+                    <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate mb-1">
+                        {company.name}
+                      </h3>
+                      {company.email && (
+                        <p className="text-sm text-gray-600 truncate mb-2">{company.email}</p>
+                      )}
+                      {company.paymentLink && (
+                        <div className="flex items-center space-x-1 mb-3">
+                          <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-sm text-green-700 font-medium">Payment link available</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-between text-sm text-gray-500">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-1">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          <span>{getTotalCampaigns(company)} campaigns</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a1 1 0 011-1h6a1 1 0 011 1v4h3a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h3z" />
+                          </svg>
+                          <span>{formatDate(company.createdAt)}</span>
+                        </div>
+                      </div>
+                      <svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
 
-              <div className="bg-gray-50 px-4 py-3 text-right sm:px-6 space-x-3">
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Creating...' : 'Create Company'}
-                </button>
+        {/* Stats Footer */}
+        {companies.length > 0 && (
+          <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium text-gray-900">{companies.length}</span> 
+                {' '}company{companies.length !== 1 ? 'ies' : ''} total
+              </div>
+              <div className="text-sm text-gray-600">
+                <span className="font-medium text-gray-900">
+                  {companies.reduce((acc, company) => acc + getTotalCampaigns(company), 0)}
+                </span>
+                {' '}total campaigns across all companies
               </div>
             </div>
-          </form>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
