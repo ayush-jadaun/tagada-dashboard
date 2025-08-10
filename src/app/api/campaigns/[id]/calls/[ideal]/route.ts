@@ -95,10 +95,11 @@ interface CallSummaryResponse {
 // GET - Get call summary by call ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string; ideal: string }> }
 ) {
   try {
-    const { id: callId } = await params;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id: campaignId, ideal: callId } = await params;
 
     if (!VAPI_API_KEY) {
       return NextResponse.json(
