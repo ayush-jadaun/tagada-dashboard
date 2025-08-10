@@ -1,106 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 import React, { useState, useEffect } from 'react';
 import { Phone, Users, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, BarChart3, Eye, Calendar, Building } from 'lucide-react';
 import { useParams } from 'next/navigation';
+import { Campaign } from '@/types/types';
 
-interface Company {
-  _id: string;
-  name: string;
-}
-
-interface Campaign {
-  _id: string;
-  name: string;
-  description: string;
-  createdAt: string;
-  updatedAt?: string;
-  status: string;
-  total_contacts: number;
-  company_id: Company;
-  csvUrl?: string;
-  vapiCampaignId?: string;
-  vapiData?: {
-    counters?: { [key: string]: number };
-    endedReason?: string;
-  };
-  csv_stats?: {
-    totalRows?: number;
-    validContacts?: number;
-    summary?: {
-      totalAmount?: number;
-      averageAmount?: number;
-    };
-  };
-}
-
-interface CallAnalytics {
-  totalCalls?: number;
-  answeredCalls?: number;
-  unansweredCalls?: number;
-  successfulCalls?: number;
-  answerRate?: number;
-  successRate?: number;
-  completionRate?: number;
-  averageCallDuration?: number;
-  totalCallDuration?: number;
-}
-
-interface OutcomeAnalytics {
-  endReasonBreakdown?: { [key: string]: number };
-  mostCommonEndReason?: string;
-}
-
-interface TimeBasedAnalytics {
-  peakCallHour?: string;
-  peakCallDay?: string;
-}
-
-interface Analytics {
-  callAnalytics?: CallAnalytics;
-  outcomeAnalytics?: OutcomeAnalytics;
-  timeBasedAnalytics?: TimeBasedAnalytics;
-  recentCalls?: any[];
-  generatedAt?: string;
-}
-
-interface CallsData {
-  calls?: any[];
-  stats?: {
-    totalCalls?: number;
-    answeredCalls?: number;
-    voicemailCalls?: number;
-  };
-  pagination?: {
-    page?: number;
-    totalPages?: number;
-    total?: number;
-  };
-}
-
-interface Status {
-  localStatus?: string;
-  vapiStatus?: string;
-  lastUpdated?: string;
-  stats?: {
-    totalCalls?: number;
-  };
-}
-
-interface CallData {
-  id?: string;
-  customer?: {
-    name?: string;
-    number?: string;
-    assistantOverrides?: {
-      variableValues?: {
-        formattedAmount?: string;
-      };
-    };
-  };
-  status?: string;
-  endedReason?: string;
-}
 const CampaignDetailPage = () => {
   const params = useParams();
   const campaignId = params.camid;
@@ -113,17 +16,24 @@ const CampaignDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-const CampaignDetailPage: React.FC = () => {
-  const params = useParams();
-  const campaignId = params.camid as string;
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [status, setStatus] = useState<Status | null>(null);
-  const [callsData, setCallsData] = useState<CallsData | null>(null);
-  const [calls, setCalls] = useState<any[]>([]);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('overview');
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      console.log("campaign id:", campaignId);
+      try {
+        await Promise.all([fetchCampaign(), fetchStatus(), fetchCalls(), fetchAnalytics()]);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError("Failed to load campaign data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (campaignId) {
+      fetchData();
+    }
+  }, [campaignId]);
 
   async function fetchCampaign() {
     try {
@@ -273,20 +183,10 @@ const CampaignDetailPage: React.FC = () => {
       </div>
     );
   }
-  if(!campaign){
-        return (
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="flex flex-col items-center space-y-4">
-              <p className="text-gray-600 text-5xl">No campaign ...</p>
-            </div>
-          </div>
-        )
-      }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-    
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-6">
