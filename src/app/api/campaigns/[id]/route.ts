@@ -9,7 +9,7 @@ const VAPI_API_KEY = process.env.VAPI_API_KEY;
 // GET - Get specific campaign by ID with call data
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
@@ -162,10 +162,10 @@ export async function GET(
 // PATCH - Update campaign
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const { name, description, status } = body;
 
@@ -220,7 +220,7 @@ export async function PATCH(
 // DELETE - Delete campaign
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;

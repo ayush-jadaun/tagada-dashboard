@@ -8,7 +8,7 @@ const VAPI_API_KEY = process.env.VAPI_API_KEY;
 // POST - Pause campaign
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;

@@ -8,7 +8,7 @@ const VAPI_API_KEY = process.env.VAPI_API_KEY;
 // GET - Get campaign status and sync with VAPI
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;

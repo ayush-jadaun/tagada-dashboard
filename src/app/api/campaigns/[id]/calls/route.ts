@@ -60,7 +60,7 @@ interface ApiResponse {
 // GET - Get calls for a specific campaign
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
