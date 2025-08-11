@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  DragEvent,
+  ChangeEvent,
+  FormEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Company } from "@/types/types";
@@ -35,6 +42,7 @@ export default function CreateCampaignPage({
   const [company, setCompany] = useState<Company | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string>("");
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [loadingState, setLoadingState] = useState<LoadingState>({
     fetchingCompany: true,
     uploadingCsv: false,
@@ -48,6 +56,8 @@ export default function CreateCampaignPage({
     csvUrl: "",
   });
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const isSubmitting =
@@ -85,27 +95,101 @@ export default function CreateCampaignPage({
   };
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ): void => {
     const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: type === "number" ? parseInt(value) || 0 : value,
     }));
+
+    // Clear error when user starts typing
+    if (error) setError(null);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.name.endsWith(".csv")) {
+  const validateFile = (file: File): boolean => {
+    // Check file type
+    if (!file.name.toLowerCase().endsWith(".csv")) {
       setError("Please select a valid CSV file");
-      return;
+      return false;
     }
+
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      setError("File size must be less than 10MB");
+      return false;
+    }
+
+    // Check if file is empty
+    if (file.size === 0) {
+      setError("Selected file is empty");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleFileSelect = (file: File): void => {
+    if (!file || !validateFile(file)) return;
 
     setError(null);
     setFormData((prev) => ({ ...prev, csvFile: file, csvUrl: "" }));
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragEnter = (e: DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Only set drag over to false if we're leaving the drop zone entirely
+    const rect = dropZoneRef.current?.getBoundingClientRect();
+    if (rect) {
+      const isOutside =
+        e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom;
+
+      if (isOutside) {
+        setIsDragOver(false);
+      }
+    }
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  };
+
+  const removeSelectedFile = (): void => {
+    setFormData((prev) => ({ ...prev, csvFile: null }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const uploadCsvFile = async (file: File): Promise<string> => {
@@ -127,15 +211,18 @@ export default function CreateCampaignPage({
     return data.url;
   };
 
-  const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>
-  ): Promise<void> => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     setError(null);
 
-    // Validation
+    // Enhanced validation
     if (!formData.name.trim()) {
       setError("Campaign name is required");
+      return;
+    }
+
+    if (formData.name.trim().length < 3) {
+      setError("Campaign name must be at least 3 characters long");
       return;
     }
 
@@ -144,8 +231,18 @@ export default function CreateCampaignPage({
       return;
     }
 
+    // Validate URL format if provided
+    if (formData.csvUrl.trim()) {
+      try {
+        new URL(formData.csvUrl.trim());
+      } catch {
+        setError("Please provide a valid URL");
+        return;
+      }
+    }
+
     try {
-      let csvUrl = formData.csvUrl;
+      let csvUrl = formData.csvUrl.trim();
 
       // Upload CSV file if one was selected
       if (formData.csvFile) {
@@ -198,8 +295,12 @@ export default function CreateCampaignPage({
     }
   };
 
-  const removeSelectedFile = (): void => {
-    setFormData((prev) => ({ ...prev, csvFile: null }));
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
   // Loading state for initial company fetch
@@ -336,7 +437,7 @@ export default function CreateCampaignPage({
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-200">
             <div className="flex items-center space-x-3">
               <svg
                 className="h-5 w-5 text-red-600 flex-shrink-0"
@@ -352,6 +453,22 @@ export default function CreateCampaignPage({
                 />
               </svg>
               <div className="text-red-700 font-medium">{error}</div>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-red-400 hover:text-red-600"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
             </div>
           </div>
         )}
@@ -386,9 +503,13 @@ export default function CreateCampaignPage({
                   value={formData.name}
                   onChange={handleInputChange}
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition-colors"
-                  placeholder="Enter campaign name"
+                  placeholder="Enter campaign name (minimum 3 characters)"
                   disabled={isSubmitting}
+                  minLength={3}
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  {formData.name.length}/100 characters
+                </p>
               </div>
 
               {/* Description */}
@@ -405,10 +526,14 @@ export default function CreateCampaignPage({
                   rows={4}
                   value={formData.description}
                   onChange={handleInputChange}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition-colors"
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition-colors resize-vertical"
                   placeholder="Describe your campaign goals and target audience"
                   disabled={isSubmitting}
+                  maxLength={500}
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  {formData.description.length}/500 characters
+                </p>
               </div>
             </div>
           </div>
@@ -432,10 +557,23 @@ export default function CreateCampaignPage({
                 </label>
 
                 {!formData.csvFile ? (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors">
+                  <div
+                    ref={dropZoneRef}
+                    onDragOver={handleDragOver}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-lg transition-all duration-200 ${
+                      isDragOver
+                        ? "border-blue-400 bg-blue-50"
+                        : "border-gray-300 hover:border-gray-400"
+                    }`}
+                  >
                     <div className="px-6 py-8 text-center">
                       <svg
-                        className="mx-auto h-12 w-12 text-gray-400 mb-4"
+                        className={`mx-auto h-12 w-12 mb-4 transition-colors ${
+                          isDragOver ? "text-blue-500" : "text-gray-400"
+                        }`}
                         stroke="currentColor"
                         fill="none"
                         viewBox="0 0 48 48"
@@ -457,9 +595,10 @@ export default function CreateCampaignPage({
                             or drag and drop
                           </span>
                           <input
+                            ref={fileInputRef}
                             id="csvFile"
                             type="file"
-                            accept=".csv"
+                            accept=".csv,text/csv"
                             onChange={handleFileChange}
                             className="sr-only"
                             disabled={isSubmitting}
@@ -469,10 +608,15 @@ export default function CreateCampaignPage({
                       <p className="text-xs text-gray-400 mt-2">
                         CSV files up to 10MB
                       </p>
+                      {isDragOver && (
+                        <p className="text-sm text-blue-600 mt-2 font-medium">
+                          Drop your CSV file here
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 animate-in fade-in duration-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <svg
@@ -493,7 +637,7 @@ export default function CreateCampaignPage({
                             {formData.csvFile.name}
                           </p>
                           <p className="text-sm text-green-600">
-                            {(formData.csvFile.size / 1024).toFixed(1)} KB
+                            {formatFileSize(formData.csvFile.size)}
                           </p>
                         </div>
                       </div>
@@ -501,7 +645,8 @@ export default function CreateCampaignPage({
                         type="button"
                         onClick={removeSelectedFile}
                         disabled={isSubmitting}
-                        className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                        className="text-green-600 hover:text-green-800 disabled:opacity-50 transition-colors p-1 rounded"
+                        title="Remove file"
                       >
                         <svg
                           className="h-5 w-5"
@@ -548,7 +693,7 @@ export default function CreateCampaignPage({
                   name="csvUrl"
                   value={formData.csvUrl}
                   onChange={handleInputChange}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition-colors"
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 placeholder-gray-400 transition-colors disabled:bg-gray-100 disabled:text-gray-500"
                   placeholder="https://example.com/contacts.csv"
                   disabled={isSubmitting || !!formData.csvFile}
                 />
@@ -562,7 +707,7 @@ export default function CreateCampaignPage({
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-between pt-6">
+          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
             <Link
               href={`/dashboard/companies/${companyId}`}
               className="inline-flex items-center text-gray-600 hover:text-gray-900 font-medium transition-colors"
@@ -595,7 +740,11 @@ export default function CreateCampaignPage({
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={
+                  isSubmitting ||
+                  !formData.name.trim() ||
+                  (!formData.csvFile && !formData.csvUrl.trim())
+                }
                 className="px-6 py-2 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center"
               >
                 {loadingState.uploadingCsv ? (
