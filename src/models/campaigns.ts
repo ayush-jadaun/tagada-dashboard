@@ -35,6 +35,7 @@ const campaignSchema = new mongoose.Schema(
         "ended",
         "failed",
         "scheduled",
+        "in-progress"
       ],
       default: "created",
     },
@@ -82,7 +83,7 @@ const campaignSchema = new mongoose.Schema(
 );
 
 // Add indexes
-campaignSchema.index({ company_id: 1 });
+
 campaignSchema.index({ vapiCampaignId: 1 });
 campaignSchema.index({ status: 1 });
 campaignSchema.index({ createdAt: -1 });
